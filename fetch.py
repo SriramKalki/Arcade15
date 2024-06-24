@@ -3,7 +3,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 # Initialize with your Slack token
-token = ''
+token = os.environ.get('API')
 client = WebClient(token=token)
 
 # Connect to SQLite database (or create it if it doesn't exist)
