@@ -1,7 +1,8 @@
 import sqlite3
+import requests
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-import os
+import time
 
 # Initialize with your Slack token
 token = ''
@@ -18,7 +19,7 @@ cursor.execute('''
 db.commit()
 
 def fetch_users_from_db():
-    cursor.execute('SELECT id, name, total_hours FROM users WHERE total_hours > 40')
+    cursor.execute('SELECT id, name, total_hours FROM users ORDER BY total_hours DESC')
     return cursor.fetchall()
 
 def search_messages_for_user_mentions(user_id):
@@ -45,8 +46,10 @@ def update_mention_count(user_id, count):
 
 def main():
     users = fetch_users_from_db()
-    print(len(users))
-    for user in users:
+    for i, user in enumerate(users):
+        if i > 0 and i % 45 == 0:
+            print("Rate limit reached. Sleeping for 60 seconds...")
+            time.sleep(60)
         user_id, user_name, total_hours = user
         count = search_messages_for_user_mentions(user_id)
         update_mention_count(user_id, count)
