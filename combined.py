@@ -1,9 +1,11 @@
+import os
 import sqlite3
+import requests
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 # Initialize with your Slack token
-token = ''
+token = os.environ.get('API')
 client = WebClient(token=token)
 
 # Connect to SQLite database (or create it if it doesn't exist)
@@ -14,7 +16,8 @@ cursor = db.cursor()
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        name TEXT
+        name TEXT,
+        total_hours REAL
     )
 ''')
 db.commit()
@@ -57,10 +60,24 @@ def fetch_users():
             break
     return users
 
+def fetch_total_hours(user_id):
+    try:
+        response = requests.get(f'https://hackhour.hackclub.com/api/stats/{user_id}')
+        data = response.json()
+        if data['ok']:
+            total_hours = data['data']['total'] / 60  # Convert minutes to hours
+            return total_hours
+        else:
+            print(f"Error fetching stats for user {user_id}: {data['error']}")
+            return None
+    except Exception as e:
+        print(f"Error fetching stats for user {user_id}: {e}")
+        return None
+
 def store_user_info(user):
     cursor.execute('''
-        INSERT OR REPLACE INTO users (id, name) VALUES (?, ?)
-    ''', (user['id'], user['profile']['real_name']))
+        INSERT OR REPLACE INTO users (id, name, total_hours) VALUES (?, ?, ?)
+    ''', (user['id'], user['profile']['real_name'], user['total_hours']))
     db.commit()
 
 def main(channel_id):
@@ -73,16 +90,15 @@ def main(channel_id):
     # Filter users based on membership in the specified channel
     users_in_channel = [user for user in users if user['id'] in channel_members]
     
-    # Store filtered users in the database
+    # Fetch total hours for each user and store in the database
     for user in users_in_channel:
-        store_user_info(user)
-    
-    # Fetch and sort user data from the database
-    cursor.execute('SELECT * FROM users')
-    rows = cursor.fetchall()
-    for row in rows:
-        print(f'User ID: {row[0]}, Name: {row[1]}')
+        total_hours = fetch_total_hours(user['id'])
+        if total_hours is not None:
+            user['total_hours'] = total_hours
+            store_user_info(user)
+            print(f"Updated total hours for user {user['id']}")
 
+# Run the main function
 if __name__ == '__main__':
     channel_id = 'C06SBHMQU8G'  # Replace with your channel ID
     main(channel_id)
